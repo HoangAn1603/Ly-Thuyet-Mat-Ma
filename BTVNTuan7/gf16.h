@@ -1,7 +1,7 @@
-#include GF16_H
+#ifndef GF16_H
 #define GF16_H
 
-#include <cstdint.h>
+#include <stdint.h>
 
 #define GF16_POLY 0x13 /* Đa thức bất khả quy: x^4 + x + 1 */
 
