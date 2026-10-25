@@ -14,9 +14,9 @@ uint8_t gf16_nhan(uint8_t a, uint8_t b) {
         uint8_t carry = a & 0x08; /* bit x^3: sắp tràn lên x^4 */
         a = (a << 1) & 0x0F; /* a = a * x */
         if (carry) {  /* Nếu a vượt quá 4 bit */
-            a ^= (GF16_POLY & 0x0F);  /* Giảm modulo đa thức bất khả quy (x^4 = x+1 -> XOR 0x03) */
+            a ^= (GF16_POLY & 0x0F);  /* Giảm modulo đa thức bất khả quy (x^4 = x + 1 -> XOR 0x03) */
         }
-        b >>= 1; /* Dịch b sang phải để xử lý bit tiếp theo */
+        b >>= 1; /* Dịch phải b để xử lý bit tiếp theo */
     }
     return result;
 }
