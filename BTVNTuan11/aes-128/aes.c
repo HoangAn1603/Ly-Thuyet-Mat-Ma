@@ -48,3 +48,30 @@ static const uint8_t SBOX[256] = {
 void thay_the_byte(uint8_t tt[16]) {
     for (int i = 0; i < 16; i++) tt[i] = SBOX[tt[i]];
 }
+
+// Dịch hàng (ShiftRows)
+void dich_hang(uint8_t tt[16]) {
+    uint8_t m[16];
+    for (int cot = 0; cot < 4; cot++)
+        for (int hang = 0; hang < 4; hang++)
+            m[4*cot + hang] = tt[4*((cot + hang) % 4) + hang];
+    memcpy(tt, m, 16);
+}
+
+// Trộn cột (MixColumns)
+static uint8_t nhan_2(uint8_t a) {
+    return (uint8_t)((a << 1) ^ ((a & 0x80) ? 0x1B : 0x00));
+}
+static uint8_t nhan_3(uint8_t a) { return nhan_2(a) ^ a; }
+
+void tron_cot(uint8_t tt[16]) {
+    for (int cot = 0; cot < 4; cot++) {
+        uint8_t *c = tt + 4*cot;
+        uint8_t a0 = c[0], a1 = c[1], a2 = c[2], a3 = c[3];
+        c[0] = nhan_2(a0) ^ nhan_3(a1) ^ a2 ^ a3;
+        c[1] = a0 ^ nhan_2(a1) ^ nhan_3(a2) ^ a3;
+        c[2] = a0 ^ a1 ^ nhan_2(a2) ^ nhan_3(a3);
+        c[3] = nhan_3(a0) ^ a1 ^ a2 ^ nhan_2(a3);
+    }
+}
+
