@@ -1,0 +1,6 @@
+input :
+plain text m : 0123456789ABCDEF
+key k : 133457799BBCDFF1
+output :
+cipher text : 85e813540f0ab405
+decrypted : 123456789abcdef
