@@ -1,0 +1,41 @@
+Khoi ro (plaintext)
+    00 00 00 00
+    00 00 00 00
+    00 00 00 00
+    00 00 00 11
+Khoa K0 (khoa mat)
+    00 00 00 00
+    00 00 00 00
+    00 00 00 00
+    00 00 00 00
+Vong 0: sau AddRoundKey(K0)
+    00 00 00 00
+    00 00 00 00
+    00 00 00 00
+    00 00 00 11
+=== VONG 1: khoa con K1
+    62 62 62 62
+    63 63 63 63
+    63 63 63 63
+    63 63 63 63
+Sau SubBytes
+    63 63 63 63
+    63 63 63 63
+    63 63 63 63
+    63 63 63 82
+Sau ShiftRows
+    63 63 63 63
+    63 63 63 63
+    63 63 63 63
+    82 63 63 63
+Sau MixColumns
+    82 63 63 63
+    82 63 63 63
+    5B 63 63 63
+    BA 63 63 63
+Dau ra vong 1 (sau AddRoundKey)
+    E0 01 01 01
+    E1 00 00 00
+    38 00 00 00
+    D9 00 00 00
+Mat ma (ciphertext) = 0410befccde6944b69dd007debe39a9d

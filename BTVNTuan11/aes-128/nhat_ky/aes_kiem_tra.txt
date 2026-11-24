@@ -1,0 +1,25 @@
+ KIEM TRA AES-128 
+SubBytes (p=...11)           OK
+ShiftRows (00..0F)           OK
+MixColumns (63,63,63,82)     OK
+MixColumns (db,13,53,45)     OK
+K1 voi khoa toan 0           OK
+K1 (slide 42)                OK
+K10 (slide 42)               OK
+Khoi ro (plaintext)
+    01 89 FE 76
+    23 AB DC 54
+    45 CD BA 32
+    67 EF 98 10
+Khoa K0 (khoa mat)
+    0F 47 0C AF
+    15 D9 B7 7F
+    71 E8 AD 67
+    C9 59 D6 98
+Vong 0: sau AddRoundKey(K0)
+    0E CE F2 D9
+    36 72 6B 2B
+    34 25 17 55
+    AE B6 4E 88
+Ciphertext (slide 42)        OK
+ Tong ket: 8/8 test dat 
