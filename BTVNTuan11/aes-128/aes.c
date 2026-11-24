@@ -96,3 +96,26 @@ void mo_rong_khoa(const uint8_t khoa[16], uint8_t kv[176]) {
         for (int j = 0; j < 4; j++) kv[4*i + j] = kv[4*(i-4) + j] ^ t[j];
     }
 }
+
+// Hàm mã hóa AES-128 và log
+void ma_hoa_aes(const uint8_t ro[16], const uint8_t khoa[16],
+                uint8_t mat[16], int so_vong_in) {
+    uint8_t kv[176], tt[16];
+    char ten[64];
+    mo_rong_khoa(khoa, kv);
+    memcpy(tt, ro, 16);
+    in_trang_thai("Khoi ro (plaintext)", tt);
+    in_trang_thai("Khoa K0 (khoa mat)", kv);
+    cong_khoa_vong(tt, kv);
+    in_trang_thai("Vong 0: sau AddRoundKey(K0)", tt);
+    for (int v = 1; v <= 10; v++) {
+        int in = (v <= so_vong_in);
+        if (in) { sprintf(ten, "=== VONG %d: khoa con K%d", v, v); in_trang_thai(ten, kv + 16*v); }
+        thay_the_byte(tt);  if (in) in_trang_thai("Sau SubBytes", tt);
+        dich_hang(tt);      if (in) in_trang_thai("Sau ShiftRows", tt);
+        if (v != 10) { tron_cot(tt); if (in) in_trang_thai("Sau MixColumns", tt); }
+        cong_khoa_vong(tt, kv + 16*v);
+        if (in) { sprintf(ten, "Dau ra vong %d (sau AddRoundKey)", v); in_trang_thai(ten, tt); }
+    }
+    memcpy(mat, tt, 16);
+}
