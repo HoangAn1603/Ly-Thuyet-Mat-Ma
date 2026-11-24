@@ -75,3 +75,24 @@ void tron_cot(uint8_t tt[16]) {
     }
 }
 
+// Thêm khóa vòng (AddRoundKey) và khóa con
+void cong_khoa_vong(uint8_t tt[16], const uint8_t kv[16]) {
+    for (int i = 0; i < 16; i++) tt[i] ^= kv[i];
+}
+
+void mo_rong_khoa(const uint8_t khoa[16], uint8_t kv[176]) {
+    static const uint8_t rcon[10] =
+        {0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1B,0x36};
+    memcpy(kv, khoa, 16);                     /* w0..w3 = khoa */
+    for (int i = 4; i < 44; i++) {            /* i = chi so word */
+        uint8_t t[4];
+        memcpy(t, kv + 4*(i-1), 4);           /* t = w[i-1] */
+        if (i % 4 == 0) {
+            uint8_t tam = t[0];               /* RotWord */
+            t[0] = t[1]; t[1] = t[2]; t[2] = t[3]; t[3] = tam;
+            for (int j = 0; j < 4; j++) t[j] = SBOX[t[j]];   /* SubWord */
+            t[0] ^= rcon[i/4 - 1];            /* Rcon */
+        }
+        for (int j = 0; j < 4; j++) kv[4*i + j] = kv[4*(i-4) + j] ^ t[j];
+    }
+}
