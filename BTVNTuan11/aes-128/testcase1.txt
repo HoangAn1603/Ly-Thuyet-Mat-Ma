@@ -1,0 +1,13 @@
+input :
+plain text m : 0x0000000000000011
+key k : 0x0000000000000000
+output :
+cipher text : 0410befccde6944b69dd007debe39a9d
+decrypted : 00000000000000000000000000000011
+
+input :
+plain text m : 0123456789abcdeffedcba9876543210
+key k : 0f1571c947d9e8590cb7add6af7f6798
+output :
+cipher text : ff0b844a0853bf7c6934ab4364148fb9
+decrypted : 0123456789abcdeffedcba9876543210
