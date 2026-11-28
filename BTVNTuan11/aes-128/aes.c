@@ -2,29 +2,6 @@
 #include <string.h>
 #include "aes.h"
 
-int hex_sang_khoi(const char *hex, uint8_t khoi[16]) {
-    char buf[33];
-    if (hex[0] == '0' && (hex[1] == 'x' || hex[1] == 'X')) hex += 2;
-    size_t n = strlen(hex);
-    if (n == 0 || n > 32) return 0;
-    memset(buf, '0', 32); buf[32] = '\0';
-    memcpy(buf + (32 - n), hex, n);       /* dem 0 ben trai */
-    for (int i = 0; i < 16; i++) {
-        unsigned v;
-        if (sscanf(buf + 2*i, "%2x", &v) != 1) return 0;
-        khoi[i] = (uint8_t)v;
-    }
-    return 1;
-}
-void in_trang_thai(const char *ten, const uint8_t tt[16]) {
-    printf("%s\n", ten);
-    for (int hang = 0; hang < 4; hang++) {
-        printf("   ");
-        for (int cot = 0; cot < 4; cot++) printf(" %02X", tt[4*cot + hang]);
-        printf("\n");
-    }
-}
-
 // SubBytes (bảng S-box)
 static const uint8_t SBOX[256] = {
     0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -45,77 +22,200 @@ static const uint8_t SBOX[256] = {
     0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D, 0x0F, 0xB0, 0x54, 0xBB, 0x16
 };
 
-void thay_the_byte(uint8_t tt[16]) {
-    for (int i = 0; i < 16; i++) tt[i] = SBOX[tt[i]];
+static uint8_t INV_SBOX[256];
+static bool inv_ready = false;
+
+static void init_inv_sbox(void) {
+    if (inv_ready) return;
+    for (int i = 0; i < 256; ++i) INV_SBOX[SBOX[i]] = (uint8_t)i;
+    inv_ready = true;
 }
 
-// Dịch hàng (ShiftRows)
-void dich_hang(uint8_t tt[16]) {
-    uint8_t m[16];
-    for (int cot = 0; cot < 4; cot++)
-        for (int hang = 0; hang < 4; hang++)
-            m[4*cot + hang] = tt[4*((cot + hang) % 4) + hang];
-    memcpy(tt, m, 16);
-}
-
-// Trộn cột (MixColumns)
-static uint8_t nhan_2(uint8_t a) {
+// Phép nhân trong GF(2^8), đa thức x^8 + x^4 + x^3 + x + 1 (0x11B)
+static uint8_t xtime(uint8_t a) {
     return (uint8_t)((a << 1) ^ ((a & 0x80) ? 0x1B : 0x00));
 }
-static uint8_t nhan_3(uint8_t a) { return nhan_2(a) ^ a; }
-
-void tron_cot(uint8_t tt[16]) {
-    for (int cot = 0; cot < 4; cot++) {
-        uint8_t *c = tt + 4*cot;
-        uint8_t a0 = c[0], a1 = c[1], a2 = c[2], a3 = c[3];
-        c[0] = nhan_2(a0) ^ nhan_3(a1) ^ a2 ^ a3;
-        c[1] = a0 ^ nhan_2(a1) ^ nhan_3(a2) ^ a3;
-        c[2] = a0 ^ a1 ^ nhan_2(a2) ^ nhan_3(a3);
-        c[3] = nhan_3(a0) ^ a1 ^ a2 ^ nhan_2(a3);
+static uint8_t gmul(uint8_t a, uint8_t b) {
+    uint8_t result = 0;
+    while (b) {
+        if (b & 1) result ^= a;
+        a = xtime(a);
+        b >>= 1;
     }
+    return result;
 }
 
-// Thêm khóa vòng (AddRoundKey) và khóa con
-void cong_khoa_vong(uint8_t tt[16], const uint8_t kv[16]) {
-    for (int i = 0; i < 16; i++) tt[i] ^= kv[i];
+// SubBytes và nghịch đảo
+void SubBytes_function(uint8_t state[16]) {
+    for (int i = 0; i < 16; ++i) state[i] = SBOX[state[i]];
+}
+void InvSubBytes_function(uint8_t state[16]) {
+    init_inv_sbox();
+    for (int i = 0; i < 16; ++i) state[i] = INV_SBOX[state[i]];
 }
 
-void mo_rong_khoa(const uint8_t khoa[16], uint8_t kv[176]) {
-    static const uint8_t rcon[10] =
-        {0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1B,0x36};
-    memcpy(kv, khoa, 16);                     /* w0..w3 = khoa */
-    for (int i = 4; i < 44; i++) {            /* i = chi so word */
-        uint8_t t[4];
-        memcpy(t, kv + 4*(i-1), 4);           /* t = w[i-1] */
-        if (i % 4 == 0) {
-            uint8_t tam = t[0];               /* RotWord */
-            t[0] = t[1]; t[1] = t[2]; t[2] = t[3]; t[3] = tam;
-            for (int j = 0; j < 4; j++) t[j] = SBOX[t[j]];   /* SubWord */
-            t[0] ^= rcon[i/4 - 1];            /* Rcon */
+// ShiftRows và nghịch đảo (hàng r dịch trái / phải r byte)
+void ShiftRows_function(uint8_t state[16]) {
+    uint8_t tmp[16];
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r)
+            tmp[4 * c + r] = state[4 * ((c + r) % 4) + r];
+    memcpy(state, tmp, 16);
+}
+void InvShiftRows_function(uint8_t state[16]) {
+    uint8_t tmp[16];
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r)
+            tmp[4 * ((c + r) % 4) + r] = state[4 * c + r];
+    memcpy(state, tmp, 16);
+}
+
+// MixColumns và nghịch đảo (nhân từng cột với ma trận trong GF(2^8))
+static const uint8_t MIX[4][4] = {
+    {0x02, 0x03, 0x01, 0x01},
+    {0x01, 0x02, 0x03, 0x01},
+    {0x01, 0x01, 0x02, 0x03},
+    {0x03, 0x01, 0x01, 0x02}
+};
+static const uint8_t INV_MIX[4][4] = {
+    {0x0E, 0x0B, 0x0D, 0x09},
+    {0x09, 0x0E, 0x0B, 0x0D},
+    {0x0D, 0x09, 0x0E, 0x0B},
+    {0x0B, 0x0D, 0x09, 0x0E}
+};
+static void mix_with_matrix(uint8_t state[16], const uint8_t M[4][4]) {
+    uint8_t tmp[16];
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r) {
+            uint8_t v = 0;
+            for (int k = 0; k < 4; ++k) v ^= gmul(M[r][k], state[4 * c + k]);
+            tmp[4 * c + r] = v;
         }
-        for (int j = 0; j < 4; j++) kv[4*i + j] = kv[4*(i-4) + j] ^ t[j];
+    memcpy(state, tmp, 16);
+}
+void MixColumns_function(uint8_t state[16])    { mix_with_matrix(state, MIX); }
+void InvMixColumns_function(uint8_t state[16]) { mix_with_matrix(state, INV_MIX); }
+
+// AddRoundKey
+void AddRoundKey_function(uint8_t state[16], const uint8_t rk[16]) {
+    for (int i = 0; i < 16; ++i) state[i] ^= rk[i];
+}
+
+// Tạo khóa con (11 khóa con, mỗi khóa 16 byte)
+void gen_subkey(const uint8_t key[16], uint8_t k[176]) {
+    static const uint8_t RCON[10] = {0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1B,0x36};
+    memcpy(k, key, 16);                          // w0..w3 = khóa
+    for (int i = 4; i < 44; ++i) {               // i = chỉ số word
+        uint8_t t[4];
+        memcpy(t, k + 4 * (i - 1), 4);           // t = w[i-1]
+        if (i % 4 == 0) {
+            uint8_t tmp = t[0];                  // RotWord
+            t[0] = t[1]; t[1] = t[2]; t[2] = t[3]; t[3] = tmp;
+            for (int j = 0; j < 4; ++j) t[j] = SBOX[t[j]];   // SubWord
+            t[0] ^= RCON[i / 4 - 1];             // Rcon
+        }
+        for (int j = 0; j < 4; ++j) k[4 * i + j] = k[4 * (i - 4) + j] ^ t[j];
     }
 }
 
-// Hàm mã hóa AES-128 và log
-void ma_hoa_aes(const uint8_t ro[16], const uint8_t khoa[16],
-                uint8_t mat[16], int so_vong_in) {
-    uint8_t kv[176], tt[16];
-    char ten[64];
-    mo_rong_khoa(khoa, kv);
-    memcpy(tt, ro, 16);
-    in_trang_thai("Khoi ro (plaintext)", tt);
-    in_trang_thai("Khoa K0 (khoa mat)", kv);
-    cong_khoa_vong(tt, kv);
-    in_trang_thai("Vong 0: sau AddRoundKey(K0)", tt);
-    for (int v = 1; v <= 10; v++) {
-        int in = (v <= so_vong_in);
-        if (in) { sprintf(ten, "=== VONG %d: khoa con K%d", v, v); in_trang_thai(ten, kv + 16*v); }
-        thay_the_byte(tt);  if (in) in_trang_thai("Sau SubBytes", tt);
-        dich_hang(tt);      if (in) in_trang_thai("Sau ShiftRows", tt);
-        if (v != 10) { tron_cot(tt); if (in) in_trang_thai("Sau MixColumns", tt); }
-        cong_khoa_vong(tt, kv + 16*v);
-        if (in) { sprintf(ten, "Dau ra vong %d (sau AddRoundKey)", v); in_trang_thai(ten, tt); }
+// Nhập/xuất
+bool hex_to_block(const char *hex, uint8_t block[16]) {
+    char buf[33];
+    if (hex[0] == '0' && (hex[1] == 'x' || hex[1] == 'X')) hex += 2;
+    size_t n = strlen(hex);
+    if (n == 0 || n > 32) return false;
+    memset(buf, '0', 32);
+    buf[32] = '\0';
+    memcpy(buf + (32 - n), hex, n);              // đệm 0 bên trái
+    for (int i = 0; i < 16; ++i) {
+        unsigned v;
+        if (sscanf(buf + 2 * i, "%2x", &v) != 1) return false;
+        block[i] = (uint8_t)v;
     }
-    memcpy(mat, tt, 16);
+    return true;
+}
+void print_hex(const char *name, const uint8_t block[16]) {
+    printf("%s", name);
+    for (int i = 0; i < 16; ++i) printf("%02X", block[i]);
+    printf("\n");
+}
+void print_state(const char *name, const uint8_t state[16]) {
+    printf("%s\n", name);
+    for (int r = 0; r < 4; ++r) {
+        printf("   ");
+        for (int c = 0; c < 4; ++c) printf(" %02X", state[4 * c + r]);
+        printf("\n");
+    }
+}
+
+// Xử lý lõi một khối AES 128 bit
+void processBlock(const uint8_t input[16], const uint8_t key[16],
+                  uint8_t output[16], bool decrypt, bool in_log) {
+    uint8_t k[176], state[16];
+    char name[64];
+    gen_subkey(key, k);
+    memcpy(state, input, 16);
+
+    if (in_log) {
+        printf("AES-128: %s\n", decrypt ? "GIAI MA" : "MA HOA");
+        print_hex("Input : ", input);
+        print_hex("Key   : ", key);
+        print_state("Khoa K0", k);
+    }
+
+    if (!decrypt) {
+        AddRoundKey_function(state, k);
+        if (in_log) print_state("Round 0 - sau AddRoundKey(K0)", state);
+        for (int r = 1; r <= 10; ++r) {
+            if (in_log) {
+                printf("Round %d \n", r);
+                sprintf(name, "Khoa con K%d", r);
+                print_state(name, k + 16 * r);
+            }
+            SubBytes_function(state);
+            if (in_log) print_state("Sau SubBytes", state);
+            ShiftRows_function(state);
+            if (in_log) print_state("Sau ShiftRows", state);
+            if (r != 10) {
+                MixColumns_function(state);
+                if (in_log) print_state("Sau MixColumns", state);
+            }
+            AddRoundKey_function(state, k + 16 * r);
+            if (in_log) {
+                sprintf(name, "Round %d - dau ra (sau AddRoundKey)", r);
+                print_state(name, state);
+            }
+        }
+    } else {
+        AddRoundKey_function(state, k + 160);
+        if (in_log) print_state("Round 10 - sau AddRoundKey(K10)", state);
+        for (int r = 9; r >= 0; --r) {
+            if (in_log) printf("--- Round %d (nguoc) ---\n", r);
+            InvShiftRows_function(state);
+            if (in_log) print_state("Sau InvShiftRows", state);
+            InvSubBytes_function(state);
+            if (in_log) print_state("Sau InvSubBytes", state);
+            AddRoundKey_function(state, k + 16 * r);
+            if (in_log) {
+                sprintf(name, "Sau AddRoundKey(K%d)", r);
+                print_state(name, state);
+            }
+            if (r != 0) {
+                InvMixColumns_function(state);
+                if (in_log) print_state("Sau InvMixColumns", state);
+            }
+        }
+    }
+
+    memcpy(output, state, 16);
+    if (in_log) print_hex("Output: ", output);
+}
+
+void encrypt(const uint8_t plaintext[16], const uint8_t key[16],
+             uint8_t ciphertext[16], bool in_log) {
+    processBlock(plaintext, key, ciphertext, false, in_log);
+}
+void decrypt(const uint8_t ciphertext[16], const uint8_t key[16],
+             uint8_t plaintext[16], bool in_log) {
+    processBlock(ciphertext, key, plaintext, true, in_log);
 }
