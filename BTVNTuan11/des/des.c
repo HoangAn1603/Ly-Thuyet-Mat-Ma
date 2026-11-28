@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <inttypes.h>
 #include "des.h"
 
 // Hàm hoán vị IP và IP^-1
@@ -34,7 +36,7 @@ uint64_t E_function(uint32_t input) {
     uint64_t result = 0;
     for (int i = 0; i < 48; ++i) {
         result <<= 1;
-        result |= (static_cast<uint64_t>(input) >> (32 - E[i])) & 1ULL;
+        result |= (uint64_t(input) >> (32 - E[i])) & 1ULL;
     }
     return result;
 }
@@ -46,7 +48,7 @@ uint32_t f_function(uint32_t R, uint64_t ki) {
     // Xử lý 8 khối 6 bit qua 8 bảng S-Box
     uint32_t sboxOutput = 0;
     for (int box = 0; box < 8; ++box) {
-        uint8_t sixBits = static_cast<uint8_t>((expanded >> (42 - 6 * box)) & 0x3F);
+        uint8_t sixBits = uint8_t((expanded >> (42 - 6 * box)) & 0x3F);
         int row = ((sixBits & 0x20) >> 4) | (sixBits & 0x01);
         int column = (sixBits >> 1) & 0x0F;
         sboxOutput = (sboxOutput << 4) | SBOX[box][row][column];
@@ -91,26 +93,53 @@ void gen_subkey(uint64_t key, uint64_t k[16]) {
         D = left_shift(D, SHIFTS[i]);
         k[i] = PC2_function((C << 28) | D);
     }
-} // <-- Đóng hàm gen_subkey tại đây
+} 
 
 // Xử lý lõi khối DES 64 bit
-uint64_t processBlock(uint64_t input, uint64_t key, bool decrypt) {
+uint64_t processBlock(uint64_t input, uint64_t key, bool decrypt, bool in_log) {
     uint64_t k[16];
     gen_subkey(key, k);
 
-    uint64_t block = IP_function(input);
-    uint32_t L = static_cast<uint32_t>(block >> 32);
-    uint32_t R = static_cast<uint32_t>(block);
-
-    for (int  i = 0;  i < 16; ++ i) {
-        uint32_t oldR = R;
-        uint64_t ki = k[decrypt ? 15 -  i :  i];
-        R = L ^ f_function(R, ki);
-        L = oldR;
+    if (in_log) {
+        printf("DES: %s \n", decrypt ? "GIAI MA" : "MA HOA");
+        printf("Input : %016" PRIX64 "\n", input);
+        printf("Key   : %016" PRIX64 "\n", key);
+        for (int i = 0; i < 16; ++i)
+            printf("K%-2d   : %012" PRIX64 "\n", i + 1, k[i]);
     }
 
-    uint64_t preOutput = (static_cast<uint64_t>(R) << 32) | L;
-    return IP_inverse_function(preOutput);
+    uint64_t block = IP_function(input);
+    uint32_t L = (uint32_t)(block >> 32);
+    uint32_t R = (uint32_t)(block);
+    if (in_log)
+        printf("Sau IP     : L0 = %08" PRIX32 "  R0 = %08" PRIX32 "\n", L, R);
+
+    for (int i = 0; i < 16; ++i) {
+        uint32_t oldR = R;
+        uint64_t ki = k[decrypt ? 15 - i : i];
+        uint32_t fr = f_function(R, ki);
+        R = L ^ fr;
+        L = oldR;
+        if (in_log)
+            printf("Vong %-2d    : L = %08" PRIX32 "  R = %08" PRIX32 "  (f = %08" PRIX32 ")\n",
+                   i + 1, L, R, fr);
+    }
+
+    uint64_t preOutput = ((uint64_t)(R) << 32) | L;
+    uint64_t output = IP_inverse_function(preOutput);
+    if (in_log) {
+        printf("Doi cho    : R16L16 = %016" PRIX64 "\n", preOutput);
+        printf("Sau IP^-1  : %016" PRIX64 "\n", output);
+    }
+    return output;
+}
+
+uint64_t encrypt(uint64_t plaintext, uint64_t key, bool in_log) {
+    return processBlock(plaintext, key, false, in_log);
+}
+
+uint64_t decrypt(uint64_t ciphertext, uint64_t key, bool in_log) {
+    return processBlock(ciphertext, key, true, in_log);
 }
 
 // Mã hóa 

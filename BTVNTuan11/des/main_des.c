@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdint.h>
-#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include "des.h"
 
@@ -34,16 +33,16 @@ int main() {
     uint64_t key = Nhap_key();
 
     // Ma hoa
-    uint64_t ciphertext = encrypt(plaintext, key);
+    uint64_t ciphertext = encrypt(plaintext, key, true);
 
-    printf("\nCiphertext (hex)   : %" PRIX64 "\n", ciphertext);
+    printf("\nCiphertext (hex)   : %016" PRIX64 "\n", ciphertext);
     printf("Ciphertext (binary): ");
     print_binary64(ciphertext);
 
     // Giai ma
-    uint64_t decrypted = decrypt(ciphertext, key);
+    uint64_t decrypted = decrypt(ciphertext, key, false);
 
-    printf("\nDecrypted (hex)    : %" PRIX64 "\n", decrypted);
+    printf("\nDecrypted (hex)    : %016" PRIX64 "\n", decrypted);
     printf("Decrypted (binary) : ");
     print_binary64(decrypted);
 
