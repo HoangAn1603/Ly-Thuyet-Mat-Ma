@@ -1,15 +1,32 @@
 #ifndef AES_H
 #define AES_H
+
 #include <stdint.h>
+#include <stdbool.h>
 
-int  hex_sang_khoi(const char *hex, uint8_t khoi[16]);
-void in_trang_thai(const char *ten, const uint8_t tt[16]);
+// Các phép biến đổi trong một vòng
+void SubBytes_function(uint8_t state[16]);
+void InvSubBytes_function(uint8_t state[16]);
+void ShiftRows_function(uint8_t state[16]);
+void InvShiftRows_function(uint8_t state[16]);
+void MixColumns_function(uint8_t state[16]);
+void InvMixColumns_function(uint8_t state[16]);
+void AddRoundKey_function(uint8_t state[16], const uint8_t rk[16]);
 
-void thay_the_byte(uint8_t tt[16]);                         /* SubBytes   */
-void dich_hang(uint8_t tt[16]);                             /* ShiftRows  */
-void tron_cot(uint8_t tt[16]);                              /* MixColumns */
-void cong_khoa_vong(uint8_t tt[16], const uint8_t kv[16]);  /* AddRoundKey */
-void mo_rong_khoa(const uint8_t khoa[16], uint8_t kv[176]); /* KeyExpansion */
-void ma_hoa_aes(const uint8_t ro[16], const uint8_t khoa[16],
-                uint8_t mat[16], int so_vong_in);
+// Sinh khoá con: k[0..15] = K0, k[16..31] = K1, ..., k[160..175] = K10
+void gen_subkey(const uint8_t key[16], uint8_t k[176]);
+
+// Hàm mã hoá và giải mã (in_log = true: in giá trị từng trạng thái)
+void processBlock(const uint8_t input[16], const uint8_t key[16],
+                  uint8_t output[16], bool decrypt, bool in_log);
+void encrypt(const uint8_t plaintext[16], const uint8_t key[16],
+             uint8_t ciphertext[16], bool in_log);
+void decrypt(const uint8_t ciphertext[16], const uint8_t key[16],
+             uint8_t plaintext[16], bool in_log);
+
+// Nhập/xuất
+bool hex_to_block(const char *hex, uint8_t block[16]);
+void print_hex(const char *name, const uint8_t block[16]);
+void print_state(const char *name, const uint8_t state[16]);
+
 #endif
